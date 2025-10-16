@@ -57,7 +57,9 @@ namespace CarSim.Client
         {
             _running = false;
             _socket?.Close();
-            _recvThread?.Join(500);
+
+            // Increase timeout for proper thread cleanup on Android
+            _recvThread?.Join(2000);
         }
 
         private void RecvLoop()

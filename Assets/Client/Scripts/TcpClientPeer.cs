@@ -56,6 +56,11 @@ namespace CarSim.Client
                 _running = true;
                 _client = new TcpClient();
                 _client.Connect(serverIp, config.tcpPort);
+
+                // Set socket timeouts to prevent hangs on Android
+                _client.ReceiveTimeout = 5000; // 5 seconds
+                _client.SendTimeout = 5000;
+
                 _stream = _client.GetStream();
 
                 Debug.Log($"[TcpClient] Connected to {serverIp}:{config.tcpPort}");
@@ -83,8 +88,9 @@ namespace CarSim.Client
             }
             catch { }
 
-            _recvThread?.Join(500);
-            _sendThread?.Join(500);
+            // Increase timeout for proper thread cleanup on Android
+            _recvThread?.Join(2000);
+            _sendThread?.Join(2000);
 
             Debug.Log("[TcpClient] Disconnected");
         }

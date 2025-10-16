@@ -91,6 +91,14 @@ namespace CarSim.Client
                 return;
             }
 
+#if UNITY_ANDROID
+            // Check for Internet permission on Android
+            if (!Application.HasUserAuthorization(UserAuthorization.WebCam))
+            {
+                Debug.LogWarning("[ClientUI] Internet permission check - ensure INTERNET permission is set in AndroidManifest.xml");
+            }
+#endif
+
             SetStatus("Connecting...");
             buttonConnect.interactable = false;
 
