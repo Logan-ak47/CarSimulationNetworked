@@ -1,578 +1,386 @@
 # Car Simulation Networked
 
-A complete Unity networked car simulation system with authoritative server (Windows) and remote touchscreen client (Android) using raw TCP/UDP sockets.
+A Unity networked car simulation system with authoritative server (Windows) and remote mobile client (Android) using raw TCP/UDP sockets.
 
 ---
 
-## **System Overview**
+## Overview
+
+This project implements a client-server architecture where:
+- **Server (Windows)**: Runs authoritative car physics simulation
+- **Client (Android)**: Provides touchscreen controls and displays car state
+
+Communication uses raw TCP/UDP sockets without any third-party networking libraries.
 
 ```
 ┌─────────────────────────────────┐          ┌──────────────────────────────┐
-│   SERVER (Windows PC)           │          │   CLIENT (Android Device)    │
+│   SERVER (Windows PC)           │          │   CLIENT (Android Phone)     │
 │                                 │          │                              │
 │  ┌─────────────────────────┐   │          │  ┌──────────────────────┐   │
 │  │ Authoritative Physics   │   │          │  │ Touchscreen Controls │   │
 │  │ - WheelColliders        │   │          │  │ - Steer, Throttle    │   │
 │  │ - Engine/Gears          │   │          │  │ - Brake, Handbrake   │   │
-│  │ - Torque Curves         │   │          │  │ - Gear Select        │   │
-│  └─────────────────────────┘   │          │  │ - Lights/Indicators  │   │
-│                                 │          │  │ - Camera Select      │   │
-│  ┌─────────────────────────┐   │          │  └──────────────────────┘   │
-│  │ Camera Focus Manager    │   │          │                              │
-│  │ - 10 camera anchors     │   │          │  ┌──────────────────────┐   │
-│  │ - Smooth transitions    │   │          │  │ State HUD            │   │
-│  └─────────────────────────┘   │          │  │ - Speed, Gear        │   │
-│                                 │          │  │ - Ping, Camera       │   │
-│  ┌─────────────────────────┐   │          │  └──────────────────────┘   │
-│  │ Network Layer           │   │          │                              │
-│  │ TCP :9000 (control)     │◄─┼─TCP─────►│  TCP (control)               │
-│  │ UDP :9001 (state 25Hz)  │◄─┼─UDP─────►│  UDP :9002 (input 60Hz)      │
-│  └─────────────────────────┘   │          │  UDP (state recv)            │
+│  │ - Torque Curves         │   │          │  │ - Gear Selection     │   │
+│  └─────────────────────────┘   │          │  └──────────────────────┘   │
+│                                 │          │                              │
+│  ┌─────────────────────────┐   │          │  ┌──────────────────────┐   │
+│  │ Network Layer           │   │          │  │ Connection & HUD     │   │
+│  │ TCP :9000 (control)     │◄─┼─TCP─────►│  │ - Connection UI      │   │
+│  │ UDP :9001 (state 25Hz)  │◄─┼─UDP─────►│  │ - Speed/Gear/Ping    │   │
+│  └─────────────────────────┘   │          │  └──────────────────────┘   │
 └─────────────────────────────────┘          └──────────────────────────────┘
 ```
 
 ---
 
-## **Features**
+## Features Implemented
 
-### **Server (Windows)**
-- Authoritative car physics simulation (50 Hz fixed timestep)
-- 4-wheel drive with WheelColliders
-- Engine torque curves, 6 forward gears + reverse + neutral
-- Steering, throttle, brake, handbrake
-- Headlights, indicators (left/right/hazard)
-- **10 camera anchors** with smooth focus transitions:
-  - FL/FR/RL/RR Wheels, Engine, Exhaust, Steering Linkage, Brake Caliper, Suspension, Dashboard
-- TCP control plane (port 9000)
-- UDP realtime state broadcast (port 9001, 20-30 Hz)
-- Input latency handling: holds last input ≤200ms, then decays to neutral
-- Debug overlay (ping, input seq, speed, gear, focus)
+### Server (Windows)
+- ✅ Authoritative car physics simulation (50 Hz fixed timestep)
+- ✅ 4-wheel drive with Unity WheelColliders
+- ✅ Engine torque curves and 6-speed gearbox + reverse + neutral
+- ✅ Steering, throttle, brake, and handbrake input
+- ✅ TCP control channel (port 9000) for reliable commands
+- ✅ UDP state broadcast (port 9001, ~25 Hz) for real-time updates
+- ✅ UDP input receiving (port 9001) for continuous control input
+- ✅ Input latency handling (holds last input for ≤200ms, then decays to neutral)
+- ✅ Debug overlay showing connection status, input age, speed, gear
+- ✅ Camera focus manager with 10 camera anchors (Dashboard, Wheels, Engine, etc.)
+- ✅ Headlights and indicator system (Left/Right/Hazard/Off)
+- ✅ Reset car functionality
 
-### **Client (Android)**
-- Touchscreen controls (steer drag area, throttle/brake sliders, handbrake toggle)
-- Gear selector (R/N/1-6)
-- Headlights & indicator toggles
-- Camera focus dropdown (10 parts)
-- Reset car button
-- HUD (speed, gear, indicator, camera focus, ping)
-- TCP control plane
-- UDP input streaming (30-60 Hz, configurable)
+### Client (Android)
+- ✅ Async TCP connection with timeout handling (10s)
+- ✅ Connection UI with server IP and token input
+- ✅ Touchscreen controls:
+  - ✅ Steering drag area
+  - ✅ Throttle/Brake sliders
+  - ✅ Handbrake toggle
+  - ✅ Gear selector buttons (R/N/1-6)
+- ✅ UDP input streaming to server (~60 Hz)
+- ✅ UDP state receiving from server
+- ✅ HUD displaying speed, gear, connection status, ping
+- ✅ Comprehensive connection logging with "[CarSimulatorClient]" prefix
+- ✅ Network diagnostics for troubleshooting connectivity issues
 
----
-
-## **Network Protocol**
-
-### **Transports**
-- **TCP (port 9000)**: Reliable control messages (HELLO, WELCOME, gear, lights, indicators, camera focus, reset)
-- **UDP (port 9001)**: Server → Client state broadcast (position, rotation, speed, RPM, wheel slip, etc.)
-- **UDP (port 9002)**: Client → Server input streaming (steer, throttle, brake, handbrake)
-
-### **Message Types**
-
-| Type | Direction | Transport | Rate | Description |
-|------|-----------|-----------|------|-------------|
-| `HELLO_C2S` | Client→Server | TCP | Once | Authentication token, UDP port, client name |
-| `WELCOME_S2C` | Server→Client | TCP | Once | Session ID, tick rate, car ID |
-| `INPUT_C2S` | Client→Server | UDP | 30-60 Hz | Steer, throttle, brake, handbrake |
-| `STATE_S2C` | Server→Client | UDP | 20-30 Hz | Position, rotation, speed, RPM, gear, wheel slip, lights, indicator, camera focus, last processed input seq |
-| `SET_GEAR_C2S` | Client→Server | TCP | On demand | Gear (-1=R, 0=N, 1-6) |
-| `TOGGLE_HEADLIGHTS_C2S` | Client→Server | TCP | On demand | Headlights on/off |
-| `SET_INDICATOR_C2S` | Client→Server | TCP | On demand | Indicator mode (Off/Left/Right/Hazard) |
-| `SET_CAMERA_FOCUS_C2S` | Client→Server | TCP | On demand | Camera part ID (0-9) |
-| `RESET_CAR_C2S` | Client→Server | TCP | On demand | Reset car to spawn position |
-| `SERVER_NOTICE_S2C` | Server→Client | TCP | On error | Error code + text |
-
-### **Header Format (7 bytes, little-endian)**
-```
-MsgType    : 1 byte
-Seq        : 2 bytes (ushort)
-TimestampMs: 4 bytes (uint)
-```
-
-### **Camera Part IDs**
-| ID | Name | Description |
-|----|------|-------------|
-| 0 | FL_Wheel | Front Left Wheel |
-| 1 | FR_Wheel | Front Right Wheel |
-| 2 | RL_Wheel | Rear Left Wheel |
-| 3 | RR_Wheel | Rear Right Wheel |
-| 4 | Engine | Engine Bay |
-| 5 | Exhaust | Exhaust Pipe |
-| 6 | SteeringLinkage | Steering Mechanism |
-| 7 | BrakeCaliperFront | Front Brake Caliper |
-| 8 | SuspensionFront | Front Suspension |
-| 9 | Dashboard | Dashboard (default) |
+### Features Coded But Not Fully Wired
+- ⚠️ **Camera Focus Dropdown**: Client UI has the dropdown, server has CameraFocusManager with 10 anchors, but the dropdown selection doesn't send messages to server yet
+- ⚠️ **Headlights Toggle**: Server handles headlight state, client has toggle button, but toggle doesn't send TCP command yet
+- ⚠️ **Indicator Buttons**: Server implements indicator logic (Left/Right/Hazard/Off), client has buttons, but they're not connected to send commands yet
+- ⚠️ **Reset Car Button**: Server has reset functionality, client has button, but not wired to send reset command yet
 
 ---
 
-## **Project Structure**
+## Network Protocol
+
+### Message Types
+
+| Type | Direction | Transport | Purpose |
+|------|-----------|-----------|---------|
+| `HELLO_C2S` | Client→Server | TCP | Initial handshake with auth token |
+| `WELCOME_S2C` | Server→Client | TCP | Connection confirmation with session ID |
+| `INPUT_C2S` | Client→Server | UDP | Continuous input (steer/throttle/brake/handbrake) |
+| `STATE_S2C` | Server→Client | UDP | Car state (position, rotation, speed, RPM, etc.) |
+| `SET_GEAR_C2S` | Client→Server | TCP | Change gear |
+| `TOGGLE_HEADLIGHTS_C2S` | Client→Server | TCP | Toggle headlights (coded, not wired) |
+| `SET_INDICATOR_C2S` | Client→Server | TCP | Set indicators (coded, not wired) |
+| `SET_CAMERA_FOCUS_C2S` | Client→Server | TCP | Change camera focus (coded, not wired) |
+| `RESET_CAR_C2S` | Client→Server | TCP | Reset car position (coded, not wired) |
+| `PING_C2S` / `PONG_S2C` | Bidirectional | TCP | Connection heartbeat |
+
+### Header Format (7 bytes, little-endian)
+```
+MsgType     : 1 byte
+Sequence    : 2 bytes (ushort)
+TimestampMs : 4 bytes (uint)
+PayloadLen  : 2 bytes (ushort)
+```
+
+---
+
+## Project Structure
 
 ```
 Assets/
-├── _Shared/
+├── _Shared/                       # Shared code between client & server
 │   ├── Config/
-│   │   └── NetConfig.cs              # ScriptableObject config
+│   │   └── NetConfig.cs          # Network configuration ScriptableObject
 │   └── Net/
-│       ├── ByteCodec.cs              # Little-endian serialization
-│       ├── RingBuffer.cs             # Thread-safe queue
-│       ├── StopwatchTime.cs          # Monotonic clock
-│       ├── MessageTypes.cs           # Enums
-│       └── Protocol.cs               # Message structs & serializers
+│       ├── ByteCodec.cs          # Binary serialization utilities
+│       ├── RingBuffer.cs         # Thread-safe queue
+│       ├── StopwatchTime.cs      # Monotonic timestamp
+│       ├── MessageTypes.cs       # Protocol enums
+│       └── Protocol.cs           # Message structs & serializers
+│
 ├── Server/
 │   ├── Scenes/
-│   │   └── Server_CarSim.unity
+│   │   └── Server_CarSim.unity   # Server scene
 │   └── Scripts/
-│       ├── TcpServerPeer.cs          # TCP listener
-│       ├── UdpServerPeer.cs          # UDP receiver/sender
-│       ├── ServerCommandRouter.cs    # Message dispatcher
-│       ├── ServerSimulationController.cs  # Authoritative physics
-│       ├── CameraFocusManager.cs     # Camera transitions
-│       ├── StateBroadcaster.cs       # State broadcast loop
-│       └── DebugOverlay.cs           # Server debug UI
-├── Client/
-│   ├── Scenes/
-│   │   └── Client_RemoteControl.unity
-│   └── Scripts/
-│       ├── TcpClientPeer.cs          # TCP connector
-│       ├── UdpClientPeer.cs          # UDP sender/receiver
-│       ├── ClientConnectionUI.cs     # Connection UI
-│       ├── ClientInputController.cs  # Input handling
-│       └── ClientStateHUD.cs         # HUD display
-└── Editor/
-    └── SceneSetupHelper.cs           # Scene creation helpers
+│       ├── TcpServerPeer.cs      # TCP listener and message handler
+│       ├── UdpServerPeer.cs      # UDP receiver/sender
+│       ├── ServerCommandRouter.cs     # Routes TCP messages to handlers
+│       ├── ServerSimulationController.cs  # Car physics simulation
+│       ├── CameraFocusManager.cs      # Camera anchor system
+│       ├── StateBroadcaster.cs        # Broadcasts car state via UDP
+│       └── DebugOverlay.cs            # Server debug UI
+│
+└── Client/
+    ├── Scenes/
+    │   └── Client_RemoteControl.unity  # Client scene
+    └── Scripts/
+        ├── TcpClientPeer.cs       # TCP connection with async timeout
+        ├── UdpClientPeer.cs       # UDP sender/receiver
+        ├── ClientConnectionUI.cs  # Connection UI and HELLO/WELCOME flow
+        ├── ClientInputController.cs   # Touch input handling
+        └── ClientStateHUD.cs          # HUD display
 ```
 
 ---
 
-## **Setup Instructions**
+## Setup & Build
 
-### **1. Create NetConfig Asset**
-1. In Unity, go to **CarSim → Create NetConfig Asset**
-2. Asset created at `Assets/_Shared/Config/NetConfig.asset`
-3. Default settings:
-   - **Token**: `demo-token-123456`
-   - **TCP Port**: 9000
-   - **UDP Port Server**: 9001
-   - **UDP Port Client**: 9002
-   - **Sim Tick Rate**: 50 Hz
-   - **Input Send Rate**: 60 Hz
-   - **State Send Rate**: 25 Hz
+### Prerequisites
+- Unity 2021.3 or newer
+- Windows PC for server
+- Android device for client
+- Both on the same WiFi network
 
-### **2. Setup Server Scene**
+### Configuration
+1. In Unity, create NetConfig asset: Right-click in Project → Create → CarSim → NetConfig
+2. Configure network settings:
+   - Token: `demo-token-123456`
+   - TCP Port: `9000`
+   - UDP Port Server: `9001`
+   - UDP Port Client: `9002`
+   - Sim Tick Rate: `50` Hz
+   - Input Send Rate: `60` Hz
+   - State Send Rate: `25` Hz
 
-#### **Option A: Auto-Generate (Quick Start)**
-1. Go to **CarSim → Setup → Create Server Scene**
-2. Opens `Server_CarSim.unity` with basic car + ground
-
-#### **Option B: Manual Setup**
-
-**Hierarchy:**
-```
-Server_CarSim
-├── Ground (Plane, scale 10x10)
-├── Directional Light
-├── Car
-│   ├── Body (Cube mesh, no collider)
-│   ├── CenterOfMass (empty, local pos Y=-0.2)
-│   ├── WheelCollider_FL/FR/RL/RR (WheelCollider components)
-│   ├── WheelMesh_FL/FR/RL/RR (Cylinder meshes)
-│   └── Anchors (10 empty GameObjects for camera parts)
-│       ├── Anchor_Dashboard
-│       ├── Anchor_FL_Wheel
-│       ├── Anchor_FR_Wheel
-│       ├── Anchor_RL_Wheel
-│       ├── Anchor_RR_Wheel
-│       ├── Anchor_Engine
-│       ├── Anchor_Exhaust
-│       ├── Anchor_SteeringLinkage
-│       ├── Anchor_BrakeCaliperFront
-│       └── Anchor_SuspensionFront
-├── Main Camera
-│   └── CameraFocusManager component
-└── ServerSystems (empty GameObject)
-    ├── TcpServerPeer
-    ├── UdpServerPeer
-    ├── ServerCommandRouter
-    ├── ServerSimulationController
-    ├── StateBroadcaster
-    └── DebugOverlay
-```
-
-**Component Wiring (ServerSystems):**
-
-1. **Add all 7 components** to `ServerSystems` GameObject
-
-2. **TcpServerPeer:**
-   - Config: Assign `NetConfig.asset`
-
-3. **UdpServerPeer:**
-   - Config: Assign `NetConfig.asset`
-   - Simulate Drop Percent: 0 (set to 10 for testing)
-
-4. **ServerCommandRouter:**
-   - Config: Assign `NetConfig.asset`
-   - Tcp Peer: Assign `TcpServerPeer`
-   - Udp Peer: Assign `UdpServerPeer`
-   - Sim Controller: Assign `ServerSimulationController`
-   - Camera Focus Manager: Assign `CameraFocusManager` (on Main Camera)
-
-5. **ServerSimulationController:**
-   - Car Body: Assign `Car` Rigidbody
-   - Center Of Mass: Assign `Car/CenterOfMass`
-   - Wheel FL/FR/RL/RR: Assign 4 WheelColliders
-   - Wheel Mesh FL/FR/RL/RR: Assign 4 Cylinder meshes
-   - **Torque Curve**: Create AnimationCurve (0,200) → (6000,400)
-   - **Gear Ratios**: Array size 8: `[-3.5, 0, 3.5, 2.5, 1.8, 1.3, 1.0, 0.8]`
-   - Final Drive Ratio: 3.5
-   - Max Rpm: 6000
-   - Max Steer Angle: 30
-   - Steer Speed: 5
-   - Brake Torque: 3000
-   - Handbrake Torque: 5000
-   - Brake Bias Front: 0.6
-
-6. **CameraFocusManager** (on Main Camera):
-   - Main Camera: Assign Main Camera
-   - **Focus Points**: Array size 10, fill each with:
-     - Part Id: (0-9 corresponding to enum)
-     - Anchor: Assign corresponding anchor transform
-     - Offset: e.g., `(0, 1, -3)` for behind/above view
-     - FOV: 60
-     - Lerp Time: 1
-
-7. **StateBroadcaster:**
-   - Config: Assign `NetConfig.asset`
-   - Udp Peer: Assign `UdpServerPeer`
-   - Sim Controller: Assign `ServerSimulationController`
-   - Camera Focus Manager: Assign `CameraFocusManager`
-
-8. **DebugOverlay:**
-   - Create Canvas (Screen Space Overlay) with Text child
-   - Udp Peer: Assign `UdpServerPeer`
-   - Sim Controller: Assign `ServerSimulationController`
-   - Camera Focus Manager: Assign `CameraFocusManager`
-   - Status Text: Assign Text component
-
-### **3. Setup Client Scene**
-
-#### **Option A: Auto-Generate (Basic)**
-1. Go to **CarSim → Setup → Create Client Scene**
-2. Opens `Client_RemoteControl.unity` with basic UI
-
-#### **Option B: Manual Setup (Full UI)**
-
-**Hierarchy:**
-```
-Client_RemoteControl
-├── UI_Root (Canvas - Screen Space Overlay)
-│   ├── Panel_Connect
-│   │   ├── Text_Title ("REMOTE CAR CONTROL")
-│   │   ├── Input_ServerIP (InputField, placeholder: 192.168.1.100)
-│   │   ├── Input_Token (InputField, placeholder: demo-token-123456)
-│   │   ├── Button_Connect (Button, text: CONNECT)
-│   │   └── Text_Status (Text, "Enter server IP...")
-│   └── Panel_Drive (Initially disabled)
-│       ├── Area_Steer (RectTransform, drag area for steering)
-│       ├── Slider_Throttle (Slider, 0-1)
-│       ├── Slider_Brake (Slider, 0-1)
-│       ├── Toggle_Handbrake (Toggle)
-│       ├── Gear Buttons (8 buttons: R/N/1/2/3/4/5/6)
-│       ├── Toggle_Headlights (Toggle)
-│       ├── Indicator Buttons (4 buttons: Off/Left/Right/Hazard)
-│       ├── Dropdown_CameraFocus (Dropdown, 10 options)
-│       ├── Button_ResetCar (Button, text: RESET)
-│       └── HUD (5 Text elements: Speed, Gear, Indicator, Focus, Ping)
-└── ClientSystems (empty GameObject)
-    ├── TcpClientPeer
-    ├── UdpClientPeer
-    ├── ClientConnectionUI
-    ├── ClientInputController
-    └── ClientStateHUD
-```
-
-**Component Wiring (ClientSystems):**
-
-1. **ClientConnectionUI:**
-   - Config: Assign `NetConfig.asset`
-   - Tcp Peer: Assign `TcpClientPeer`
-   - Udp Peer: Assign `UdpClientPeer`
-   - Panel Connect: Assign `Panel_Connect`
-   - Input Server IP: Assign `Input_ServerIP`
-   - Input Token: Assign `Input_Token`
-   - Button Connect: Assign `Button_Connect`
-   - Text Status: Assign `Text_Status`
-   - Panel Drive: Assign `Panel_Drive`
-
-2. **ClientInputController:**
-   - Config: Assign `NetConfig.asset`
-   - Tcp Peer: Assign `TcpClientPeer`
-   - Udp Peer: Assign `UdpClientPeer`
-   - Steer Area: Assign `Area_Steer` RectTransform
-   - Slider Throttle: Assign `Slider_Throttle`
-   - Slider Brake: Assign `Slider_Brake`
-   - Toggle Handbrake: Assign `Toggle_Handbrake`
-   - Gear Buttons: Assign all 8 gear buttons
-   - Toggle Headlights: Assign `Toggle_Headlights`
-   - Indicator Buttons: Assign 4 buttons
-   - Dropdown Camera Focus: Assign `Dropdown_CameraFocus`
-   - Btn Reset Car: Assign `Button_ResetCar`
-
-3. **ClientStateHUD:**
-   - Udp Peer: Assign `UdpClientPeer`
-   - Text Speed/Gear/Indicator/Camera Focus/Ping: Assign HUD Text elements
-
-4. **TcpClientPeer & UdpClientPeer:**
-   - Config: Assign `NetConfig.asset`
-
-### **4. Unity Project Settings**
-
-**Time Settings:**
-- Edit → Project Settings → Time
-- Fixed Timestep: `0.02` (50 Hz)
-
-**Player Settings (Server - Windows):**
-- Edit → Project Settings → Player → PC, Mac & Linux Standalone
-- Resolution and Presentation:
-  - Run In Background: ✓
-  - VSync Count: Don't Sync
-- Other Settings:
-  - Scripting Backend: Mono or IL2CPP
-  - API Compatibility Level: .NET 4.x
-
-**Player Settings (Client - Android):**
-- Edit → Project Settings → Player → Android
-- Other Settings:
-  - Scripting Backend: IL2CPP
-  - Target Architectures: ARM64 ✓
-  - Internet Access: Require
-  - Write Permission: External (optional)
-
----
-
-## **Build Instructions**
-
-### **Windows Server Build**
-1. Open `Server_CarSim.unity`
+### Server Build (Windows)
+1. Open `Assets/Server/Scenes/Server_CarSim.unity`
 2. File → Build Settings
 3. Platform: PC, Mac & Linux Standalone
-4. Architecture: x86_64
-5. Add Open Scene (`Server_CarSim`)
-6. Build → Save as `CarSimServer.exe`
+4. Build and save as `CarSimServer.exe`
 
-### **Android Client Build**
-1. Open `Client_RemoteControl.unity`
+### Client Build (Android)
+1. Open `Assets/Client/Scenes/Client_RemoteControl.unity`
 2. File → Build Settings
 3. Platform: Android
-4. Add Open Scene (`Client_RemoteControl`)
-5. Build → Save as `CarSimClient.apk`
-6. Install on Android device via USB or ADB
+4. Player Settings → Other Settings:
+   - Scripting Backend: IL2CPP
+   - Target Architectures: ARM64 ✓
+   - Internet Access: **Require**
+5. Build and save as `CarSimClient.apk`
+6. Install on Android device
 
 ---
 
-## **Running the System**
+## Running the System
 
-### **Step 1: Start Server**
+### Step 1: Start Server
 1. Run `CarSimServer.exe` on Windows PC
-2. Server listens on:
-   - TCP: `0.0.0.0:9000`
-   - UDP: `0.0.0.0:9001`
-3. Check console for `[TcpServer] Listening on port 9000`
+2. Server starts listening on TCP:9000 and UDP:9001
+3. Console shows: `[TcpServer] Listening on port 9000`
 
-### **Step 2: Find Server IP**
-- On Windows, open Command Prompt:
-  ```
-  ipconfig
-  ```
-- Note the **IPv4 Address** of your Wi-Fi adapter (e.g., `192.168.1.100`)
+### Step 2: Configure Firewall
+If connection fails, allow ports through Windows Firewall:
+- Windows Defender Firewall → Advanced Settings
+- Inbound Rules → New Rule → Port
+- TCP port 9000, UDP port 9001
+- Allow the connection
 
-### **Step 3: Connect Client**
-1. Ensure Android device is on **same Wi-Fi network** as server
-2. Launch `CarSimClient` APK on Android
-3. Enter server IP (e.g., `192.168.1.100`)
-4. Tap **CONNECT**
-5. Wait for "Connected!" status
+### Step 3: Find Server IP
+On Windows PC, open Command Prompt:
+```cmd
+ipconfig
+```
+Note the IPv4 Address of your WiFi adapter (e.g., `192.168.0.100`)
 
-### **Step 4: Drive**
-- **Steer**: Drag left/right on steer area
-- **Throttle/Brake**: Adjust sliders
-- **Handbrake**: Toggle on/off
-- **Gear**: Tap R/N/1-6 buttons
-- **Headlights**: Toggle on/off
-- **Indicators**: Tap Left/Right/Hazard/Off buttons
-- **Camera Focus**: Select from dropdown (10 parts)
-- **Reset**: Tap RESET button
+### Step 4: Connect Client
+1. Ensure Android device is on the **same WiFi network**
+2. Launch CarSimClient app
+3. Enter server IP (e.g., `192.168.0.100`)
+4. Token is pre-filled with default value
+5. Tap **CONNECT**
+6. Wait for status to show "Connected! Session: XXXX"
+7. UI switches to drive panel
 
----
-
-## **Controls Reference**
-
-### **Client Controls**
-
-| Control | Type | Range | Description |
-|---------|------|-------|-------------|
-| **Steer Area** | Drag | -1 to 1 | Horizontal drag to steer |
-| **Throttle Slider** | Slider | 0 to 1 | Accelerate |
-| **Brake Slider** | Slider | 0 to 1 | Brake |
-| **Handbrake Toggle** | Toggle | On/Off | Rear wheel brake |
-| **Gear Buttons** | Buttons | R/N/1-6 | Gear selection |
-| **Headlights Toggle** | Toggle | On/Off | Toggle headlights |
-| **Indicator Buttons** | Buttons | Off/L/R/H | Turn signals |
-| **Camera Dropdown** | Dropdown | 0-9 | Camera focus part |
-| **Reset Button** | Button | - | Reset car to spawn |
-
-### **Server Debug Overlay**
-- **Input Seq**: Last processed input sequence number
-- **Input Age**: Milliseconds since last input received
-- **Speed**: Current speed in km/h
-- **RPM**: Engine RPM
-- **Gear**: Current gear (R/N/1-6)
-- **Steer**: Steering angle in degrees
-- **Focus**: Current camera part name
-- **Lights**: Headlight state
-- **Indicator**: Indicator state
+### Step 5: Drive!
+- **Steer**: Drag left/right on the steer area
+- **Throttle**: Slide throttle slider up
+- **Brake**: Slide brake slider up
+- **Handbrake**: Toggle handbrake button
+- **Gear**: Tap R/N/1/2/3/4/5/6 buttons to change gears
 
 ---
 
-## **Testing Matrix**
+## Connection Flow
 
-### **Basic Connectivity**
-- ✓ Client connects to server on same Wi-Fi
-- ✓ HELLO/WELCOME handshake completes
-- ✓ Client enters drive mode
+The client establishes connection using an async TCP connection with timeout:
 
-### **Input Controls (all 5+ required controls)**
-- ✓ Steer: Car turns left/right on server
-- ✓ Throttle: Car accelerates
-- ✓ Brake: Car decelerates
-- ✓ Handbrake: Rear wheels lock
-- ✓ Gear R: Car reverses
-- ✓ Gear N: Car idles
-- ✓ Gear 1-6: Car shifts gears
+1. **User taps CONNECT**
+   - Client validates server IP
+   - Initiates async TCP connection (10-second timeout)
+   - Status: "Connecting..."
 
-### **Light & Indicator Toggles**
-- ✓ Headlights toggle on/off
-- ✓ Indicator Left/Right/Hazard/Off
+2. **TCP Connection Established**
+   - OnConnected event fires
+   - Client sends HELLO message with token
+   - Client starts UDP listener
+   - Status: "Waiting for WELCOME..."
 
-### **Camera Focus**
-- ✓ Select all 10 camera parts from dropdown
-- ✓ Server camera smoothly transitions to anchor
-- ✓ Client HUD shows current camera part name
+3. **Server Receives HELLO**
+   - Validates authentication token
+   - Sends WELCOME message with session ID
+   - Learns client UDP endpoint
 
-### **Latency & Performance**
-- ✓ Ping < 150ms on LAN
-- ✓ Input stream ≤60 Hz (check with Wireshark)
-- ✓ State stream ~25 Hz
-- ✓ GC allocations near-zero during play (Unity Profiler)
+4. **Client Receives WELCOME**
+   - Switches to drive panel
+   - Starts sending input via UDP
+   - Status: "Connected! Session: XXXX"
 
-### **Resilience**
-- ✓ Server handles stale input (>200ms) by decaying to neutral
-- ✓ Simulate 10% packet drop: car still responsive
-- ✓ Client disconnect: server continues, client can reconnect
+5. **Ongoing Communication**
+   - Client sends INPUT_C2S via UDP (~60 Hz)
+   - Server sends STATE_S2C via UDP (~25 Hz)
+   - TCP PING/PONG heartbeat every 3 seconds
 
 ---
 
-## **Network Rates Summary**
+## Logging & Debugging
 
-| Layer | Rate | Description |
-|-------|------|-------------|
-| **Physics** | 50 Hz | Fixed timestep (0.02s) |
-| **Client Input** | 30-60 Hz | Configurable via NetConfig.inputSendRate |
-| **Server State** | 20-30 Hz | Configurable via NetConfig.stateSendRate |
-| **TCP Control** | On-demand | Gear, lights, indicators, camera, reset |
+All client logs are prefixed with `[CarSimulatorClient]` for easy filtering when debugging Android builds via logcat:
+
+```bash
+adb logcat | grep CarSimulatorClient
+```
+
+Key logs to watch:
+- `========== CONNECT BUTTON CLICKED ==========` - Connection initiated
+- `TCP CONNECTION ESTABLISHED` - TCP socket connected
+- `HELLO message sent via TCP` - Handshake sent
+- `========== WELCOME RECEIVED FROM SERVER ==========` - Connection successful
+- `CONNECTION FAILED` - Connection error with details
+- Network diagnostics show phone IP, network interfaces, connectivity tests
 
 ---
 
-## **Limitations & Known Issues**
+## Controls Reference
+
+### Working Controls
+| Control | Type | Action |
+|---------|------|--------|
+| Steer Area | Touch Drag | Drag left/right to steer |
+| Throttle Slider | Slider | Slide up to accelerate |
+| Brake Slider | Slider | Slide up to brake |
+| Handbrake Toggle | Toggle | Tap to engage/release handbrake |
+| Gear Buttons | Buttons | Tap R/N/1-6 to shift gears |
+
+### UI Elements (Not Yet Wired)
+| Control | Status | Notes |
+|---------|--------|-------|
+| Camera Dropdown | UI Present, Backend Ready | Dropdown exists, server has CameraFocusManager, needs TCP command wiring |
+| Headlights Toggle | UI Present, Backend Ready | Toggle exists, server handles state, needs TCP command wiring |
+| Indicator Buttons | UI Present, Backend Ready | Buttons exist (Off/L/R/H), server handles logic, needs TCP command wiring |
+| Reset Button | UI Present, Backend Ready | Button exists, server has reset, needs TCP command wiring |
+
+---
+
+## Technical Highlights
+
+### Async Connection with Timeout
+- Connection happens in background thread to avoid blocking UI
+- 10-second timeout prevents indefinite hangs
+- Proper error callbacks to UI with meaningful messages
+- Clean thread management with proper join on disconnect
+
+### Zero-Allocation Networking
+- Pre-allocated byte buffers for serialization
+- Ring buffers use fixed-size arrays
+- No LINQ or boxing in hot paths
+- Thread-safe queues for inter-thread communication
+
+### Input Latency Handling
+Server holds last valid input for 200ms, then gradually decays to neutral to prevent runaway cars when connection drops temporarily.
+
+### Camera System
+10 camera anchors strategically placed:
+- Dashboard (default view)
+- 4 Wheels (FL, FR, RL, RR)
+- Engine
+- Exhaust
+- Steering Linkage
+- Front Brake Caliper
+- Front Suspension
+
+---
+
+## Known Limitations
 
 1. **Single Client**: Server accepts only one TCP connection at a time
-2. **LAN Only**: No NAT traversal or relay server
-3. **No Interpolation**: Client displays raw server state (consider adding for smoother visuals)
-4. **No Encryption**: Token sent in plaintext over TCP (add TLS for production)
-5. **Fixed Camera Offsets**: Camera offsets are serialized in Inspector (adjust per anchor for best view)
+2. **LAN Only**: No NAT traversal, both devices must be on same network
+3. **No Encryption**: Token sent in plaintext (use TLS for production)
+4. **No Client-Side Prediction**: Some input lag may be noticeable on high-latency networks
+5. **Incomplete UI Wiring**: Camera dropdown, headlights, indicators, reset button need final TCP command wiring
 
 ---
 
-## **Troubleshooting**
+## Troubleshooting
 
-### **Client can't connect**
-- Ensure both devices on same Wi-Fi
-- Check Windows Firewall allows TCP 9000, UDP 9001
-- Verify server IP with `ipconfig`
-- Check server console for `[TcpServer] Listening on port 9000`
+### "Connection timed out" Error
+- ✓ Check both devices are on same WiFi network
+- ✓ Verify server is running and showing "Listening on port 9000"
+- ✓ Confirm server IP with `ipconfig` matches what you entered
+- ✓ Disable Windows Firewall temporarily to test
+- ✓ Check router isn't blocking device-to-device communication
 
-### **High ping (>150ms)**
-- Check Wi-Fi signal strength
-- Close bandwidth-heavy apps
-- Reduce `inputSendRate` and `stateSendRate` in NetConfig
+### "Connection FAILED" with Socket Error
+- ✓ Check Android logs for specific SocketException details
+- ✓ Verify phone has network connectivity (check WiFi icon)
+- ✓ Ensure Android app has INTERNET permission
+- ✓ Try pinging server from another device to verify it's reachable
 
-### **Car not moving**
-- Check server console for `[UdpServer] Client endpoint learned`
-- Verify client is sending inputs (server debug overlay shows `Input Seq` increasing)
-- Check WheelColliders have proper ground contact (adjust suspension)
+### Car Doesn't Move
+- ✓ Check server debug overlay shows "Input Seq" incrementing
+- ✓ Verify UDP packets are arriving (server logs show input age < 200ms)
+- ✓ Check WheelColliders have ground contact (adjust suspension in Inspector)
+- ✓ Ensure gear is not in Neutral (tap gear button 1-6)
 
-### **Camera not switching**
-- Verify all 10 anchors assigned in `CameraFocusManager.focusPoints`
-- Check anchor positions are distinct
-- Ensure `CameraFocusManager.mainCamera` is assigned
-
-### **Build errors**
-- Ensure .NET 4.x API Compatibility Level
-- Check IL2CPP build (Android) completed without stripping errors
-- Verify all scripts have no syntax errors
-
----
-
-## **Performance Tuning**
-
-### **Reduce Latency**
-- Increase `inputSendRate` to 60 Hz
-- Reduce `stateSendRate` to 20 Hz (lower bandwidth)
-- Use wired Ethernet for server PC (if possible)
-
-### **Reduce Bandwidth**
-- Lower `stateSendRate` to 20 Hz
-- Compress state data (e.g., quantize floats to shorts)
-
-### **Avoid GC Spikes**
-- All byte buffers pre-allocated
-- RingBuffers use fixed-size arrays
-- No LINQ or boxing in hot paths
-- Use Unity Profiler to verify
+### High Ping (>100ms on LAN)
+- ✓ Check WiFi signal strength on phone
+- ✓ Close background apps using network bandwidth
+- ✓ Reduce `inputSendRate` and `stateSendRate` in NetConfig
+- ✓ Use 5GHz WiFi band instead of 2.4GHz if available
 
 ---
 
-## **Extending the System**
+## Future Enhancements
 
-### **Add More Clients**
-- Modify `TcpServerPeer` to accept multiple clients (list of connections)
-- Track client IDs and separate input queues
-- Broadcast state to all clients
+### Easy Additions
+- Wire the remaining 4 buttons (camera dropdown, headlights, indicators, reset) - just need to hook up button click events to send TCP messages
+- Add visual feedback for headlights and indicators on server car model
+- Implement client-side prediction for smoother steering
 
-### **Add Interpolation**
-- Store last 2-3 server states on client
-- Lerp between states based on timestamps
-
-### **Add Prediction**
-- Client simulates car locally using same physics
-- Apply server corrections when state arrives
-
-### **Add Voice Chat**
-- Use separate UDP channel for Opus-encoded audio
+### Advanced Features
+- Multi-client support (multiple phones controlling separate cars)
+- Client-side interpolation between server states
+- WebGL client version for browser-based control
+- Replay system recording input and state streams
 
 ---
 
-## **License**
+## Credits
+
+- **Networking**: Raw TCP/UDP sockets (System.Net.Sockets)
+- **Physics**: Unity WheelColliders
+- **UI**: Unity UI (uGUI)
+- **Build System**: Unity 2021.3 LTS
+
+---
+
+## License
 
 This project is provided as-is for educational purposes. Feel free to modify and extend.
 
 ---
 
-## **Credits**
-
-- **Networking**: Raw TCP/UDP with System.Net.Sockets
-- **Physics**: Unity WheelColliders
-- **UI**: Unity UI (uGUI)
-
----
-
-**Enjoy your networked car simulation!**
+**Enjoy driving your networked car!** 🚗📱

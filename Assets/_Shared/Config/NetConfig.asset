@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: NetConfig
   m_EditorClassIdentifier: 
   token: 123456
-  tcpPort: 9010
-  udpPortServer: 9011
-  udpPortClientListen: 9012
+  tcpPort: 9000
+  udpPortServer: 9001
+  udpPortClientListen: 9002
   simTickRate: 60
   inputSendRate: 60
   stateSendRate: 25
