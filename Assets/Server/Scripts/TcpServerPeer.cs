@@ -137,6 +137,15 @@ namespace CarSim.Server
                     if (_listener.Pending())
                     {
                         _client = _listener.AcceptTcpClient();
+
+                        // Set socket options for better connection stability
+                        _client.NoDelay = true; // Disable Nagle's algorithm for low latency
+                        _client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+
+                        // Set longer timeouts to prevent premature disconnections
+                        _client.ReceiveTimeout = 30000; // 30 seconds
+                        _client.SendTimeout = 30000;
+
                         _stream = _client.GetStream();
                         Debug.Log($"[TcpServer] Client connected: {_client.Client.RemoteEndPoint}");
 

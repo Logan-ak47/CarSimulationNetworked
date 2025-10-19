@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using CarSim.Shared;
 using System;
+using TMPro;
 
 namespace CarSim.Client
 {
@@ -38,7 +39,7 @@ namespace CarSim.Client
         public Button btnIndicatorOff;
 
         [Header("Camera UI")]
-        public Dropdown dropdownCameraFocus;
+        public TMP_Dropdown dropdownCameraFocus;
 
         [Header("Other")]
         public Button btnResetCar;
@@ -202,6 +203,9 @@ namespace CarSim.Client
                 dropdownCameraFocus.ClearOptions();
                 dropdownCameraFocus.AddOptions(new System.Collections.Generic.List<string>
                 {
+                    // General camera modes
+                    "Follow Camera", "Hood Camera", "Orbit Camera",
+                    // Car part focus cameras
                     "FL Wheel", "FR Wheel", "RL Wheel", "RR Wheel",
                     "Engine", "Exhaust", "Steering", "Brake Caliper", "Suspension", "Dashboard"
                 });

@@ -231,6 +231,74 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &650536964
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 650536967}
+  - component: {fileID: 650536966}
+  - component: {fileID: 650536965}
+  m_Layer: 0
+  m_Name: CameraController
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &650536965
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 650536964}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5f5e8b81a441c184c862f9fdab647ce5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CarSim.Server.ServerCameraController
+  carTransform: {fileID: 419224996702666712}
+  mainCamera: {fileID: 1801690289}
+  followOffset: {x: 0, y: 2, z: -5}
+  followSmoothSpeed: 5
+  hoodOffset: {x: 0, y: 1, z: 1}
+  orbitDistance: 8
+  orbitHeight: 3
+  orbitSpeed: 20
+--- !u!114 &650536966
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 650536964}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 19d0f88acb167c645aec4458c0906ca1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CarSim.Server.CameraFocusManager
+  mainCamera: {fileID: 1801690289}
+  focusPoints: []
+  cameraController: {fileID: 650536965}
+--- !u!4 &650536967
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 650536964}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -3.17852, y: 0, z: -0.67548}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &861963739
 GameObject:
   m_ObjectHideFlags: 0
@@ -820,6 +888,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   mainCamera: {fileID: 1801690289}
   focusPoints: []
+  cameraController: {fileID: 0}
 --- !u!114 &1801690292
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1011,6 +1080,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 092e8814a01557d4b80ffcfbb4f9f4a6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!4 &419224996702666712 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5042451028210974339, guid: fa6286a6daf95b64498e11bb0f1444ae, type: 3}
+  m_PrefabInstance: {fileID: 958192875}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -1022,3 +1096,4 @@ SceneRoots:
   - {fileID: 1373348713}
   - {fileID: 1342985041}
   - {fileID: 1025021157}
+  - {fileID: 650536967}

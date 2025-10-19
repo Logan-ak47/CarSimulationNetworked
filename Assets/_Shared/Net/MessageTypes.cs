@@ -11,21 +11,29 @@ namespace CarSim.Shared
         SET_INDICATOR_C2S = 6,
         SET_CAMERA_FOCUS_C2S = 7,
         RESET_CAR_C2S = 8,
-        SERVER_NOTICE_S2C = 9
+        SERVER_NOTICE_S2C = 9,
+        PING_C2S = 10,
+        PONG_S2C = 11
     }
 
     public enum CameraPartId : byte
     {
-        FL_Wheel = 0,
-        FR_Wheel = 1,
-        RL_Wheel = 2,
-        RR_Wheel = 3,
-        Engine = 4,
-        Exhaust = 5,
-        SteeringLinkage = 6,
-        BrakeCaliperFront = 7,
-        SuspensionFront = 8,
-        Dashboard = 9
+        // General camera modes (0-9)
+        FollowCamera = 0,
+        HoodCamera = 1,
+        OrbitCamera = 2,
+
+        // Car part focus cameras (10+)
+        FL_Wheel = 10,
+        FR_Wheel = 11,
+        RL_Wheel = 12,
+        RR_Wheel = 13,
+        Engine = 14,
+        Exhaust = 15,
+        SteeringLinkage = 16,
+        BrakeCaliperFront = 17,
+        SuspensionFront = 18,
+        Dashboard = 19
     }
 
     public enum IndicatorMode : byte

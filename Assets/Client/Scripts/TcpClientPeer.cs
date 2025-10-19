@@ -20,6 +20,10 @@ namespace CarSim.Client
         private RingBuffer<Action> _mainThreadActions = new RingBuffer<Action>(128);
         private byte[] _recvBuffer = new byte[Protocol.MAX_PACKET_SIZE];
 
+        // Heartbeat to keep connection alive
+        private float _lastPingTime;
+        private const float PING_INTERVAL = 3f; // Send ping every 3 seconds
+
         public event Action<WelcomeS2C> OnWelcome;
         public event Action<ServerNoticeS2C> OnNotice;
         public event Action OnDisconnected;
@@ -40,6 +44,13 @@ namespace CarSim.Client
                     Debug.LogError($"[TcpClient] Main thread callback error: {ex.Message}");
                 }
             }
+
+            // Send periodic ping to keep connection alive
+            if (IsConnected && Time.time - _lastPingTime >= PING_INTERVAL)
+            {
+                _lastPingTime = Time.time;
+                SendPing();
+            }
         }
 
         private void OnDestroy()
@@ -57,9 +68,13 @@ namespace CarSim.Client
                 _client = new TcpClient();
                 _client.Connect(serverIp, config.tcpPort);
 
-                // Set socket timeouts to prevent hangs on Android
-                _client.ReceiveTimeout = 5000; // 5 seconds
-                _client.SendTimeout = 5000;
+                // Set socket options for better connection stability
+                _client.NoDelay = true; // Disable Nagle's algorithm for low latency
+                _client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+
+                // Set longer timeouts to prevent premature disconnections
+                _client.ReceiveTimeout = 30000; // 30 seconds
+                _client.SendTimeout = 30000;
 
                 _stream = _client.GetStream();
 
@@ -188,6 +203,10 @@ namespace CarSim.Client
                     ServerNoticeS2C notice = Protocol.DeserializeServerNotice(buffer, offset);
                     _mainThreadActions.TryEnqueue(() => OnNotice?.Invoke(notice));
                     break;
+                case MsgType.PONG_S2C:
+                    // Received pong response - connection is alive
+                    Debug.Log("[TcpClient] Received PONG from server");
+                    break;
             }
         }
 
@@ -198,6 +217,16 @@ namespace CarSim.Client
             byte[] copy = new byte[packet.Length];
             Buffer.BlockCopy(packet, 0, copy, 0, packet.Length);
             _outboundQueue.TryEnqueue(copy);
+        }
+
+        private void SendPing()
+        {
+            if (!IsConnected) return;
+
+            byte[] buffer = new byte[ByteCodec.HEADER_SIZE];
+            int offset = 0;
+            ByteCodec.WriteHeader(buffer, ref offset, MsgType.PING_C2S, 0, (uint)(Time.time * 1000), 0);
+            SendMessage(buffer);
         }
     }
 }

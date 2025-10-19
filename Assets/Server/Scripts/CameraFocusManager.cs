@@ -17,11 +17,13 @@ namespace CarSim.Server
     {
         public Camera mainCamera;
         public CameraFocusPoint[] focusPoints;
+        public ServerCameraController cameraController; // For general camera modes
 
-        private CameraPartId _currentPartId = CameraPartId.Dashboard;
-        private CameraPartId _targetPartId = CameraPartId.Dashboard;
+        private CameraPartId _currentPartId = CameraPartId.FollowCamera;
+        private CameraPartId _targetPartId = CameraPartId.FollowCamera;
         private float _lerpProgress = 1f;
         private float _lerpDuration = 1f;
+        private bool _isGeneralCameraMode = true;
 
         private Vector3 _startPos, _targetPos;
         private Quaternion _startRot, _targetRot;
@@ -46,6 +48,9 @@ namespace CarSim.Server
 
         private void Update()
         {
+            // Only update camera if NOT in general camera mode (ServerCameraController handles those)
+            if (_isGeneralCameraMode) return;
+
             if (_lerpProgress < 1f)
             {
                 _lerpProgress += Time.deltaTime / _lerpDuration;
@@ -83,25 +88,56 @@ namespace CarSim.Server
 
             _targetPartId = partId;
 
-            CameraFocusPoint targetFocus = GetFocusPoint(_targetPartId);
-            if (targetFocus == null || targetFocus.anchor == null)
+            // Check if it's a general camera mode (0-2)
+            if ((int)partId <= 2)
             {
-                Debug.LogWarning($"[CameraFocus] No focus point for {_targetPartId}");
-                return;
+                // General camera mode - use ServerCameraController
+                _isGeneralCameraMode = true;
+                _lerpProgress = 1f; // Instant switch
+                _currentPartId = partId;
+
+                if (cameraController != null)
+                {
+                    cameraController.enabled = true;
+                    cameraController.SetCameraMode((int)partId);
+                    Debug.Log($"[CameraFocus] Switched to general camera mode: {_targetPartId}");
+                }
+                else
+                {
+                    Debug.LogWarning($"[CameraFocus] ServerCameraController not assigned!");
+                }
             }
+            else
+            {
+                // Part-specific focus - use focus points
+                _isGeneralCameraMode = false;
 
-            _startPos = mainCamera.transform.position;
-            _startRot = mainCamera.transform.rotation;
-            _startFov = mainCamera.fieldOfView;
+                // Disable ServerCameraController
+                if (cameraController != null)
+                {
+                    cameraController.enabled = false;
+                }
 
-            _targetPos = targetFocus.anchor.position + targetFocus.anchor.TransformDirection(targetFocus.offset);
-            _targetRot = Quaternion.LookRotation(targetFocus.anchor.position - _targetPos);
-            _targetFov = targetFocus.fov;
+                CameraFocusPoint targetFocus = GetFocusPoint(_targetPartId);
+                if (targetFocus == null || targetFocus.anchor == null)
+                {
+                    Debug.LogWarning($"[CameraFocus] No focus point for {_targetPartId}");
+                    return;
+                }
 
-            _lerpDuration = targetFocus.lerpTime;
-            _lerpProgress = 0f;
+                _startPos = mainCamera.transform.position;
+                _startRot = mainCamera.transform.rotation;
+                _startFov = mainCamera.fieldOfView;
 
-            Debug.Log($"[CameraFocus] Transitioning to {_targetPartId}");
+                _targetPos = targetFocus.anchor.position + targetFocus.anchor.TransformDirection(targetFocus.offset);
+                _targetRot = Quaternion.LookRotation(targetFocus.anchor.position - _targetPos);
+                _targetFov = targetFocus.fov;
+
+                _lerpDuration = targetFocus.lerpTime;
+                _lerpProgress = 0f;
+
+                Debug.Log($"[CameraFocus] Transitioning to part focus: {_targetPartId}");
+            }
         }
 
         private CameraFocusPoint GetFocusPoint(CameraPartId partId)

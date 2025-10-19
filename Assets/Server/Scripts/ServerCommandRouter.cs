@@ -60,6 +60,9 @@ namespace CarSim.Server
                     case MsgType.RESET_CAR_C2S:
                         HandleResetCar(msg);
                         break;
+                    case MsgType.PING_C2S:
+                        HandlePing(msg);
+                        break;
                     default:
                         Debug.LogWarning($"[ServerRouter] Unknown message type: {msg.msgType}");
                         break;
@@ -151,6 +154,16 @@ namespace CarSim.Server
         {
             simController?.ResetCar();
             Debug.Log($"[ServerRouter] Reset car");
+        }
+
+        private void HandlePing(TcpMessage msg)
+        {
+            // Respond with PONG to keep connection alive
+            byte[] buffer = new byte[ByteCodec.HEADER_SIZE];
+            int offset = 0;
+            ByteCodec.WriteHeader(buffer, ref offset, MsgType.PONG_S2C, _sendSeq++, msg.timestampMs, 0);
+            tcpPeer.SendMessage(SubArray(buffer, 0, ByteCodec.HEADER_SIZE));
+            Debug.Log("[ServerRouter] Received PING, sent PONG");
         }
 
         private void SendNotice(byte code, string text)
